@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8081:8081"
+      - "35729:35729"   # opcional, para LiveReload
+    volumes:
+      - .:/app           # monta o código fonte
+      - ~/.m2:/root/.m2  # cache do Maven (opcional, agiliza builds)
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DEVTOOLS_REMOTE_SECRET=mysecret # se usar devtools remoto
+    working_dir: /app
+    command: ["./mvnw", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]

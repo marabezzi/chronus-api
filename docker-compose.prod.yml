@@ -1,0 +1,26 @@
+services:
+  app:
+    image: chronus-api:prod    # imagem construída previamente
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DATABASE_URL=jdbc:postgresql://db:5432/prod_db
+      - DATABASE_USER=user
+      - DATABASE_PASSWORD=secret
+    depends_on:
+      - db
+    restart: always
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=prod_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=secret
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  db_data:

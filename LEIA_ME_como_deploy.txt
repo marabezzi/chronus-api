@@ -1,0 +1,12 @@
+#Tem que ser no Bash
+# Subir desenvolvimento
+./deploy.sh up dev
+
+# Derrubar desenvolvimento
+./deploy.sh down dev
+
+# Subir produção
+./deploy.sh up prod
+
+# Derrubar produção
+./deploy.sh down prod

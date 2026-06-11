@@ -1,0 +1,5 @@
+FROM maven:3.9-eclipse-temurin-21
+WORKDIR /app
+# O código será montado via volume, não copiamos tudo aqui
+EXPOSE 8080
+CMD ["./mvnw", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]
