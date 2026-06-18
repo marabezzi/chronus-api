@@ -8,7 +8,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.support.SessionStatus;
 
 import br.com.atom.chronus_api.config.IdClassConfig;
 import br.com.atom.chronus_api.dtos.SessionStatusDTO;
