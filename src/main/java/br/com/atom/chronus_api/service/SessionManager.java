@@ -1,18 +1,20 @@
 package br.com.atom.chronus_api.service;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.stereotype.Service;
+
+import br.com.atom.chronus_api.config.IdClassConfig;
+import br.com.atom.chronus_api.dtos.LoginResponseDTO;
+import br.com.atom.chronus_api.dtos.SessionStatusDTO;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-
-import org.springframework.stereotype.Service;
-
-import br.com.atom.chronus_api.config.IdClassConfig;
-import br.com.atom.chronus_api.dtos.SessionStatusDTO;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Gerencia o token de sessão do iDClass.
@@ -95,38 +97,39 @@ public class SessionManager {
      * Retorna o status atual da sessão.
      */
     public SessionStatusDTO getStatus() {
-    if (session == null || sessionObtidoEm == null) {
-        return new SessionStatusDTO(false, null, 0, "Sem sessão ativa");
+        if (session == null || sessionObtidoEm == null) {
+            return new SessionStatusDTO(false, null, 0, "Sem sessão ativa");
+        }
+
+        long segundosDecorridos = ChronoUnit.SECONDS.between(
+                sessionObtidoEm, LocalDateTime.now());
+        long segundosRestantes = TTL_SEGUNDOS - segundosDecorridos;
+
+        if (segundosRestantes <= 0) {
+            return new SessionStatusDTO(false, null, 0, "Sessão expirada");
+        }
+
+        return new SessionStatusDTO(
+                true,
+                session.substring(0, Math.min(8, session.length())) + "...",
+                (int) segundosRestantes,
+                "Ativa"
+        );
     }
-
-    long segundosDecorridos = ChronoUnit.SECONDS.between(
-            sessionObtidoEm, LocalDateTime.now());
-    long segundosRestantes = TTL_SEGUNDOS - segundosDecorridos;
-
-    if (segundosRestantes <= 0) {
-        return new SessionStatusDTO(false, null, 0, "Sessão expirada");
-    }
-
-    return new SessionStatusDTO(
-            true,
-            session.substring(0, Math.min(8, session.length())) + "...",
-            (int) segundosRestantes,
-            "Ativa"
-    );
-}
 
     // ─────────────────────────────────────────────────────────────────────
     // HELPERS PRIVADOS
     // ─────────────────────────────────────────────────────────────────────
 
     private String fazerLogin() {
-        String novaSession = authService.login();
-        if (novaSession != null) {
-            session         = novaSession;
-            sessionObtidoEm = LocalDateTime.now();
-        }
+    LoginResponseDTO response = authService.login();
+    if (response != null && response.getSession() != null) {
+        session         = response.getSession();
+        sessionObtidoEm = LocalDateTime.now();
         return session;
     }
+    return null;
+   }
 
     /**
      * Tenta renovar a sessão via keep-alive.
@@ -162,4 +165,17 @@ public class SessionManager {
         // Keep-alive falhou — novo login
         return fazerLogin();
     }
+
+    /**
+     * Força renovação imediata do token.
+     * Chamado quando o relógio retorna HTTP 401 ou 403.
+     */
+    public synchronized String renovarTokenForcado() {
+        log.info("Renovação forçada do token...");
+        session         = null;
+        sessionObtidoEm = null;
+        return fazerLogin();
+    }
+
+
 }

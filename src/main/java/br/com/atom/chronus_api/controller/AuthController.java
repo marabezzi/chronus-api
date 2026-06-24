@@ -54,8 +54,8 @@ public class AuthController {
         }
 
         return ResponseEntity.status(503).body(Map.of(
-                "erro",    "Nao foi possivel autenticar no relogio",
-                "status",  "ERRO"
+                "erro",   "Nao foi possivel autenticar no relogio",
+                "status", "ERRO"
         ));
     }
 

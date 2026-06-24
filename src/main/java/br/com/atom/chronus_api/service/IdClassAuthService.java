@@ -8,71 +8,92 @@ import java.net.http.HttpResponse;
 import org.springframework.stereotype.Service;
 
 import br.com.atom.chronus_api.config.IdClassConfig;
+import br.com.atom.chronus_api.dtos.LoginRequestDTO;
+import br.com.atom.chronus_api.dtos.LoginResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Realiza o login no relógio iDClass e retorna o session token.
+ * Serviço de autenticação com o relógio iDClass.
  *
- * Endpoint: POST /login.fcgi
- * Body:     { "login": "admin", "password": "admin" }
- * Retorno:  { "session": "abc123" }
+ * Passo 1: login()        — faz o POST /login.fcgi e retorna o token
+ * Passo 2: buildCookie()  — monta o header Cookie para uso nos requests
+ *
+ * Separação de responsabilidades:
+ *   - IdClassAuthService → sabe como fazer login no relógio
+ *   - SessionManager     → decide quando fazer login (gerência do TTL)
+ *   - Demais services    → usam getSessionValida() sem saber dos detalhes
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class IdClassAuthService {
 
-    private final IdClassConfig idClassConfig;
-    private final HttpClient    httpClient;
-    private final ObjectMapper  mapper = new ObjectMapper();
+    private final IdClassConfig config;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * Faz login no relógio e retorna o session token.
+     * Realiza o login no relógio iDClass.
      *
-     * @return token de sessão ou null se falhar
+     * @return LoginResponseDTO com o token de sessão, ou null se falhar
      */
-    public String login() {
+    public LoginResponseDTO login() {
         try {
-            String url  = idClassConfig.getBaseUrl() + "/login.fcgi";
-            String body = mapper.writeValueAsString(java.util.Map.of(
-                    "login",    idClassConfig.getUser(),
-                    "password", idClassConfig.getPassword()
-            ));
+            // Monta o corpo: {"login":"admin","password":"admin"}
+            LoginRequestDTO loginRequest = new LoginRequestDTO(
+                    config.getUser(),
+                    config.getPassword()
+            );
+            String requestBody = objectMapper.writeValueAsString(loginRequest);
+
+            String url = config.getBaseUrl() + "/login.fcgi";
+            log.debug("Tentando login no relógio: {}", url);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
             HttpResponse<String> response = httpClient.send(
                     request,
-                    HttpResponse.BodyHandlers.ofString());
+                    HttpResponse.BodyHandlers.ofString()
+            );
 
-            if (response.statusCode() != 200) {
-                log.error("Login falhou: HTTP {}", response.statusCode());
-                return null;
+            if (response.statusCode() == 200) {
+                LoginResponseDTO loginResponse = objectMapper.readValue(
+                        response.body(),
+                        LoginResponseDTO.class
+                );
+                log.info("Login realizado com sucesso.");
+                return loginResponse;
             }
 
-            JsonNode json = mapper.readTree(response.body());
-
-            if (json.has("session")) {
-                String session = json.get("session").asString();
-                log.info("Login realizado com sucesso. Session: {}...",
-                        session.substring(0, Math.min(8, session.length())));
-                return session;
-            }
-
-            log.error("Login falhou: resposta sem 'session'. Body: {}",
-                    response.body());
+            log.error("Falha no login. HTTP {}: {}", response.statusCode(), response.body());
             return null;
 
         } catch (Exception e) {
-            log.error("Erro ao fazer login no iDClass: {}", e.getMessage());
+            log.error("Erro ao conectar com o relógio iDClass: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    /**
+     * Monta o valor do header Cookie para os requests ao relógio.
+     *
+     * O iDClass exige que o token de sessão seja enviado como cookie:
+     *   Cookie: session=xYz9AbC...
+     *
+     * Uso nos próximos services:
+     *   String cookie = authService.buildCookie(sessionManager.getSessionValida());
+     *   HttpRequest.newBuilder().header("Cookie", cookie)...
+     *
+     * @param sessionToken token retornado pelo login
+     * @return string formatada para o header Cookie
+     */
+    public String buildCookie(String sessionToken) {
+        return "session=" + sessionToken;
     }
 }
