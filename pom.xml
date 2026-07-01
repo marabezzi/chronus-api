@@ -33,8 +33,8 @@
 	<!-- Dependências comuns a todos os ambientes -->
 	<dependencies>
 		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webmvc</artifactId>
+    	<groupId>org.springframework.boot</groupId>
+    	<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 
 		<dependency>

@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
  */
 @Data
 @NoArgsConstructor
-public class AfdtRequestDTO {
+public class AfdRequestDTO {
 
     /**
      * Data inicial no formato ddMMyyyy.
