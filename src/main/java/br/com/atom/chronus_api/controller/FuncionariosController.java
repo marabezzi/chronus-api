@@ -69,12 +69,14 @@ public class FuncionariosController {
     }
 
     /**
-     * PUT /api/funcionarios
+     * PUT /api/funcionarios/{pis}
      * Altera dados de um empregado no relógio via /update_users.fcgi
      */
-    @PutMapping
-    public ResponseEntity<String> atualizarEmpregado(@RequestBody UpdateUserDTO usuario) {
-        log.info("Atualizando empregado PIS={}", usuario.getPis());
+    @PutMapping("/{pis}")
+    public ResponseEntity<String> atualizarEmpregado(@PathVariable long pis,
+                                                      @RequestBody UpdateUserDTO usuario) {
+        usuario.setPis(pis); // garante que o PIS do body bate com o da URL
+        log.info("Atualizando empregado PIS={}", pis);
 
         String resultado = funcionariosService.atualizarEmpregado(usuario);
 
