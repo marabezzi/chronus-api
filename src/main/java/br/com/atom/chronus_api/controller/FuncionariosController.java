@@ -1,6 +1,7 @@
 package br.com.atom.chronus_api.controller;
 
 import br.com.atom.chronus_api.dtos.FuncionarioResponseDTO;
+import br.com.atom.chronus_api.dtos.UpdateUserDTO;
 import br.com.atom.chronus_api.dtos.UsersResponseDTO;
 import br.com.atom.chronus_api.service.FuncionariosService;
 import lombok.RequiredArgsConstructor;
@@ -51,11 +52,11 @@ public class FuncionariosController {
 
     /**
      * POST /api/funcionarios/importar
-     * Importa empregados cadastrados no relógio via /load_users.fcgi
+     * Importa empregados do relógio via /load_users.fcgi
      */
     @PostMapping("/importar")
     public ResponseEntity<UsersResponseDTO> importarEmpregados() {
-        log.info("Iniciando importação de empregados do relógio");
+        log.info("Iniciando importação de empregados");
 
         UsersResponseDTO resultado = funcionariosService.importarEmpregados();
 
@@ -64,6 +65,40 @@ public class FuncionariosController {
         }
 
         log.info("Importação concluída: {} empregado(s)", resultado.getCount());
+        return ResponseEntity.ok(resultado);
+    }
+
+    /**
+     * PUT /api/funcionarios
+     * Altera dados de um empregado no relógio via /update_users.fcgi
+     */
+    @PutMapping
+    public ResponseEntity<String> atualizarEmpregado(@RequestBody UpdateUserDTO usuario) {
+        log.info("Atualizando empregado PIS={}", usuario.getPis());
+
+        String resultado = funcionariosService.atualizarEmpregado(usuario);
+
+        if (resultado == null) {
+            return ResponseEntity.internalServerError().build();
+        }
+
+        return ResponseEntity.ok(resultado);
+    }
+
+    /**
+     * DELETE /api/funcionarios/{pis}
+     * Remove empregado do relógio via /remove_users.fcgi
+     */
+    @DeleteMapping("/{pis}")
+    public ResponseEntity<String> deletaFuncionario(@PathVariable long pis) {
+        log.info("Deletando empregado PIS={}", pis);
+
+        String resultado = funcionariosService.deletaFuncionario(pis);
+
+        if (resultado == null) {
+            return ResponseEntity.internalServerError().build();
+        }
+
         return ResponseEntity.ok(resultado);
     }
 

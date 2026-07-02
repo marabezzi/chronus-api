@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import br.com.atom.chronus_api.config.IdClassConfig;
 import br.com.atom.chronus_api.dtos.FuncionarioResponseDTO;
+import br.com.atom.chronus_api.dtos.UpdateUserDTO;
 import br.com.atom.chronus_api.dtos.UserDTO;
 import br.com.atom.chronus_api.dtos.UsersResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -91,7 +92,7 @@ public class FuncionariosService {
     }
 
 
-    // ── Importar empregados do relógio (/load_users.fcgi) ────────────────────
+    // ── Importar empregados (/load_users.fcgi) ────────────────────────────────
 
     public UsersResponseDTO importarEmpregados() {
         try {
@@ -101,21 +102,66 @@ public class FuncionariosService {
                 return null;
             }
 
-            String bodyJson = montarBodyUsers(session);
-            log.info("Importando empregados — body: [{}]", bodyJson);
-
-            HttpResponse<String> response = executarRequisicao(bodyJson, session, "/load_users.fcgi");
-            log.info("HTTP STATUS: {}", response.statusCode());
+            HttpResponse<String> response = executarRequisicao(
+                    montarBodyUsers(session), session, "/load_users.fcgi");
 
             if (response.statusCode() == 200) {
                 log.info("Empregados recebidos ({} bytes)", response.body().length());
                 UsersResponseDTO result = objectMapper.readValue(response.body(), UsersResponseDTO.class);
-                log.info("Total de empregados importados: {}", result.getCount());
+                log.info("Total importado: {}", result.getCount());
                 return result;
             }
 
             if (response.statusCode() == 401 || response.statusCode() == 403) {
-                log.warn("Sessão rejeitada (HTTP {}). Renovando e retentando...", response.statusCode());
+                log.warn("Sessão rejeitada (HTTP {}). Renovando...", response.statusCode());
+                sessionManager.renovarTokenForcado();
+
+                String novaSession = sessionManager.getSession();
+                if (novaSession == null) return null;
+
+                HttpResponse<String> retry = executarRequisicao(
+                        montarBodyUsers(novaSession), novaSession, "/load_users.fcgi");
+
+                if (retry.statusCode() == 200) {
+                    UsersResponseDTO result = objectMapper.readValue(retry.body(), UsersResponseDTO.class);
+                    log.info("Total importado após retry: {}", result.getCount());
+                    return result;
+                }
+            }
+
+            log.error("Erro ao importar empregados. HTTP {}: {}", response.statusCode(), response.body());
+            return null;
+
+        } catch (Exception e) {
+            log.error("Erro ao importar empregados: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+
+    // ── Alterar empregado (/update_users.fcgi) ────────────────────────────────
+
+    public String atualizarEmpregado(UpdateUserDTO usuario) {
+        try {
+            String session = sessionManager.getSession();
+            if (session == null) {
+                log.error("Sem sessão válida para atualizar empregado.");
+                return null;
+            }
+
+            String bodyJson = montarBodyUpdate(session, usuario);
+            log.info("Atualizando empregado PIS={} — body: [{}]", usuario.getPis(), bodyJson);
+
+            HttpResponse<String> response = executarRequisicao(bodyJson, session, "/update_users.fcgi");
+            log.info("HTTP STATUS: {}", response.statusCode());
+
+            if (response.statusCode() == 200) {
+                log.info("Empregado atualizado com sucesso. Resposta: {}", response.body());
+                return response.body();
+            }
+
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                log.warn("Sessão rejeitada (HTTP {}). Renovando...", response.statusCode());
                 sessionManager.renovarTokenForcado();
 
                 String novaSession = sessionManager.getSession();
@@ -125,24 +171,75 @@ public class FuncionariosService {
                 }
 
                 HttpResponse<String> retry = executarRequisicao(
-                        montarBodyUsers(novaSession), novaSession, "/load_users.fcgi");
+                        montarBodyUpdate(novaSession, usuario), novaSession, "/update_users.fcgi");
 
                 if (retry.statusCode() == 200) {
-                    log.info("Empregados recebidos após retry ({} bytes)", retry.body().length());
-                    UsersResponseDTO result = objectMapper.readValue(retry.body(), UsersResponseDTO.class);
-                    log.info("Total de empregados importados após retry: {}", result.getCount());
-                    return result;
+                    log.info("Empregado atualizado após retry. Resposta: {}", retry.body());
+                    return retry.body();
                 }
 
                 log.error("Erro após renovar sessão. HTTP {}: {}", retry.statusCode(), retry.body());
                 return null;
             }
 
-            log.error("Erro ao importar empregados. HTTP {}: {}", response.statusCode(), response.body());
+            log.error("Erro ao atualizar empregado. HTTP {}: {}", response.statusCode(), response.body());
             return null;
 
         } catch (Exception e) {
-            log.error("Erro de comunicação ao importar empregados: {}", e.getMessage(), e);
+            log.error("Erro ao atualizar empregado: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+
+    // ── Deletar empregado (/remove_users.fcgi) ────────────────────────────────
+
+    public String deletaFuncionario(long pis) {
+        try {
+            String session = sessionManager.getSession();
+            if (session == null) {
+                log.error("Sem sessão válida para deletar empregado.");
+                return null;
+            }
+
+            String bodyJson = montarBodyRemove(session, pis);
+            log.info("Deletando empregado PIS={} — body: [{}]", pis, bodyJson);
+
+            HttpResponse<String> response = executarRequisicao(bodyJson, session, "/remove_users.fcgi");
+            log.info("HTTP STATUS: {}", response.statusCode());
+
+            if (response.statusCode() == 200) {
+                log.info("Empregado PIS={} removido com sucesso. Resposta: {}", pis, response.body());
+                return response.body();
+            }
+
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                log.warn("Sessão rejeitada (HTTP {}). Renovando...", response.statusCode());
+                sessionManager.renovarTokenForcado();
+
+                String novaSession = sessionManager.getSession();
+                if (novaSession == null) {
+                    log.error("Não foi possível renovar a sessão.");
+                    return null;
+                }
+
+                HttpResponse<String> retry = executarRequisicao(
+                        montarBodyRemove(novaSession, pis), novaSession, "/remove_users.fcgi");
+
+                if (retry.statusCode() == 200) {
+                    log.info("Empregado PIS={} removido após retry. Resposta: {}", pis, retry.body());
+                    return retry.body();
+                }
+
+                log.error("Erro após renovar sessão. HTTP {}: {}", retry.statusCode(), retry.body());
+                return null;
+            }
+
+            log.error("Erro ao deletar empregado PIS={}. HTTP {}: {}", pis, response.statusCode(), response.body());
+            return null;
+
+        } catch (Exception e) {
+            log.error("Erro ao deletar empregado PIS={}: {}", pis, e.getMessage(), e);
             return null;
         }
     }
@@ -162,6 +259,34 @@ public class FuncionariosService {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("limit", 100);
         body.put("offset", 0);
+        body.put("session", session);
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private String montarBodyUpdate(String session, UpdateUserDTO usuario) throws IOException {
+        // new_pis sempre igual ao pis — PIS nunca pode ser alterado
+        Map<String, Object> user = new LinkedHashMap<>();
+        user.put("pis",              usuario.getPis());
+        user.put("new_pis",          usuario.getPis()); // mantém o mesmo PIS
+        user.put("name",             usuario.getName());
+        user.put("code",             usuario.getCode());
+        user.put("password",         usuario.getPassword());
+        user.put("admin",            usuario.isAdmin());
+        user.put("rfid",             usuario.getRfid());
+        user.put("bars",             usuario.getBars());
+        user.put("registration",     usuario.getRegistration());
+        user.put("remove_templates", usuario.isRemoveTemplates());
+        user.put("templates",        usuario.getTemplates() != null ? usuario.getTemplates() : List.of());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("session", session);
+        body.put("users", List.of(user));
+        return objectMapper.writeValueAsString(body);
+    }
+
+    private String montarBodyRemove(String session, long pis) throws IOException {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("users", List.of(pis));
         body.put("session", session);
         return objectMapper.writeValueAsString(body);
     }
