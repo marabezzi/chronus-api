@@ -2,7 +2,7 @@ services:
   app:
     image: chronus-api:prod    # imagem construída previamente
     ports:
-      - "8081:8081"
+      - "${CHRONUS_API_BIND_IP:-127.0.0.1}:${CHRONUS_API_PORT:-8113}:8113"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - DATABASE_URL=jdbc:postgresql://db:5432/prod_db
