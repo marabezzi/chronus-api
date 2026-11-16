@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "8081:8081"
+      - "127.0.0.1:${CHRONUS_API_PORT:-8113}:8113"
       - "35729:35729"   # opcional, para LiveReload
     volumes:
       - .:/app           # monta o código fonte
